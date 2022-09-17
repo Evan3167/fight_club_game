@@ -4,20 +4,32 @@ import java.util.Scanner;
 public class FightClub {
     
     public static void main(String args[]) {
-        // Pick loadout
-        Fighter player = new Fighter("player");
-        Fighter bot = new Fighter("bot");
+        String playerName = "PLAYER";
+        String botName = "BOT";
+
+        Fighter player;
+        Fighter bot = new BasicFighter(botName);
 
         boolean playerTurn = true;
         try (Scanner scan = new Scanner(System.in);) {
-            while (true) {
-                IFighter currentFighter = playerTurn ? player : bot;
-                currentFighter.refreshLoadOut();
+            
+            // Pick loadout
+            System.out.print("Pick a perk.. 'poison','heal',or 'crit': ");
+            String perk = scan.nextLine();
+            System.out.println();
+            switch(perk) {
+                case "poison": player = new PoisonFighter(playerName); break;
+                case "heal": player = new HealFighter(playerName); break;
+                case "crit": player = new CritFighter(playerName); break;
+                default : System.out.println("Idiot your Basic now."); player = new BasicFighter(playerName); break;
+            }
 
+            while (true) {
                 boolean actionComplete = false;
                 if (playerTurn) {
-                    System.out.printf("It is the %s's turn. Pick Action: \n",player.name);
+                    System.out.printf("It is the %s's turn. Pick Action: ",player.name);
                     actionComplete = takeAction(scan.nextInt(), player, bot);
+                    System.out.println();
                 } else {
                     System.out.printf("It is the %s's turn.\n", bot.name);
                     Random rando = new Random();
@@ -45,93 +57,125 @@ public class FightClub {
         if (actionChoice == 1) {
             // Attack
             System.out.printf("%s attacked %s.\n", attacker.name, defender.name);
-            defender.takeDamage(attacker.loadOut.attack);
+            defender.takeDamage(attacker.attack());
             return true;
         } else if (actionChoice == 2) {
             // Heal
-            attacker.healSelf(attacker.loadOut.heal); 
-            System.out.printf("%s healed for %d.\n", attacker.name, attacker.loadOut.heal);
+            attacker.healSelf(); 
             return true;
         } else if (actionChoice == 3) {
             // Dodge
-            System.out.printf("%s is attempting to dodge the next attack.\n", attacker.name);
-            attacker.tryDodgeNextAttack(defender.loadOut.attack);
+            attacker.tryDodgeNextAttack();
             return true;
         } else {
             // "Pick a real choice" -- reset action choice
+            System.out.println("Not a real action. Select again!");
             return false;
         }
     }
 
-    static class Fighter implements IFighter {
+    static abstract class Fighter {
         public String name = null;
-        private int currentHealth = 20;
-        private final int MAX_HEALTH = 20;
-        private final int MIN_HEALTH = 0;
+        protected int currentHealth = 20;
+        protected final int MAX_HEALTH = 20;
+        protected final int MIN_HEALTH = 0;
 
         public boolean isDodging = false;
-        private boolean isAlive = true;
-        public LoadOut loadOut = null;
-        Perk perk = null;
+        protected boolean isAlive = true;
+
+        protected Random seed;
 
         public Fighter(String name) {
             this.name = name;
-            refreshLoadOut();
+            this.seed = new Random();
         }
 
-        public void tryDodgeNextAttack(int opponentsAttack) {
-            if (this.loadOut.dodge >= opponentsAttack) {
-                this.isDodging = true;
-            }
+        public void tryDodgeNextAttack() {
+            System.out.printf("%s is attempting to dodge the next attack.\n", this.name);
+            this.isDodging = true;
         }
 
-        public void healSelf(int heal) {
-            this.currentHealth = Math.min(currentHealth + heal, MAX_HEALTH);
+        abstract int attack();
+        abstract void takeDamage(int damage);
+        abstract void healSelf();
+    }
+
+    static class BasicFighter extends Fighter {
+        public BasicFighter(String name) {
+            super(name);
+        }
+
+        public void healSelf() {
+            int heal = super.seed.nextInt(6) + 1;
+            super.currentHealth = Math.min(super.currentHealth + heal, super.MAX_HEALTH);
+            System.out.printf("%s healed for %d.\n", super.name, heal);
+        }
+
+        public int attack() {
+            return super.seed.nextInt(6) + 1;
         }
 
         public void takeDamage(int damage) {
-            if (!isDodging) {
-                this.currentHealth = Math.max(this.currentHealth - damage, MIN_HEALTH);
-                System.out.printf("%s took %d damage.\n", this.name, damage);
+            if (isDodging && (super.seed.nextInt(6) + 1) >= damage) {
+                System.out.printf("%s dodged the attack!\n", super.name);
             } else {
-                System.out.printf("%s dodged the attack!\n", this.name);
-                this.isDodging = false;
+                super.currentHealth = Math.max(super.currentHealth - damage, super.MIN_HEALTH);
+                System.out.printf("%s took %d damage.\n", super.name, damage);
             }
+            super.isDodging = false;
 
-            if (this.currentHealth == 0) {
-                this.isAlive = false;
+            if (super.currentHealth == 0) {
+                super.isAlive = false;
             }
-        }
-
-        public void refreshLoadOut() {
-            // System.out.printf("%s loadout refreshed.\n",this.name);
-            this.loadOut = new LoadOut();
         }
     }
 
-    static class LoadOut {
-        public int attack = 0;
-        public int heal = 0;
-        public int dodge = 0;
-
-        public LoadOut() {
-            Random rando = new Random();
-            this.attack = rando.nextInt(6) + 1;
-            this.heal = rando.nextInt(6) + 1;
-            this.dodge = rando.nextInt(6) + 1;
+    static class PoisonFighter extends BasicFighter {
+        public PoisonFighter(String name) {
+            super(name);
         }
+        // Poison tick 1 dmg for 3 turns if attack lands and deals greater than > 0.
+        // But you your attacks deal one less damage 
 
+    }
+    static class HealFighter extends BasicFighter {
+        public HealFighter(String name) {
+            super(name);
+        }
+        // Heal 2 health everytime you successfully dodge.
         @Override
-        public String toString() {
-            return "LoadOut [attack=" + attack + ", dodge=" + dodge + ", heal=" + heal + "]";
+        public void takeDamage(int damage) {
+            if (isDodging && (super.seed.nextInt(6) + 1) >= damage) {
+                System.out.printf("%s dodged the attack!\n", super.name);
+                System.out.print("Heal Perk: ");
+                super.healSelf();
+            } else {
+                super.currentHealth = Math.max(super.currentHealth - damage, super.MIN_HEALTH);
+                System.out.printf("%s took %d damage.\n", super.name, damage);
+            }
+            super.isDodging = false;
+
+            if (super.currentHealth == 0) {
+                super.isAlive = false;
+            }
         }
-    }
+    } 
 
-    /* Not implemeneted yet */
-    class Perk {
-    }
-
-    interface IFighter {
-        public void refreshLoadOut();
+    static class CritFighter extends BasicFighter {
+        private final int CRIT_CHANCE_MODIFIER = 20;
+        public CritFighter(String name) {
+            super(name);
+        }
+        // Chance to crit double damage at %20
+        @Override
+        public int attack() {
+            int critChance = super.seed.nextInt(100) + 1;
+            int damage = super.seed.nextInt(6) + 1;
+            if (critChance <= CRIT_CHANCE_MODIFIER) {
+                System.out.println("Crit Perk: Critical Hit!");
+                damage *= 2;
+            }
+            return damage;
+        }
     }
 }
